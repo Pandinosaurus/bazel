@@ -78,9 +78,4 @@ public final class ForStatement extends Statement {
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.FOR;
-  }
 }

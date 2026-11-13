@@ -22,43 +22,55 @@ package net.starlark.java.syntax;
  * slice expressions and starred expressions cannot appear on the LHS. TODO(bazel-team): Add support
  * for assigning to slices (e.g. a[2:6] = [3]).
  */
-public abstract class Expression extends Node {
-
-  /**
-   * Kind of the expression. This is similar to using instanceof, except that it's more efficient
-   * and can be used in a switch/case.
-   */
-  public enum Kind {
-    BINARY_OPERATOR,
-    COMPREHENSION,
-    CONDITIONAL,
-    DICT_EXPR,
-    DOT,
-    CALL,
-    FLOAT_LITERAL,
-    IDENTIFIER,
-    INDEX,
-    INT_LITERAL,
-    LAMBDA,
-    LIST_EXPR,
-    SLICE,
-    STRING_LITERAL,
-    UNARY_OPERATOR,
-  }
+public abstract sealed class Expression extends Node
+    permits BinaryOperatorExpression,
+        CallExpression,
+        CastExpression,
+        Comprehension,
+        ConditionalExpression,
+        DictExpression,
+        DotExpression,
+        Ellipsis,
+        FloatLiteral,
+        Identifier,
+        IndexExpression,
+        IntLiteral,
+        IsInstanceExpression,
+        LambdaExpression,
+        ListExpression,
+        SliceExpression,
+        StringLiteral,
+        TypeApplication,
+        UnaryOperatorExpression {
 
   Expression(FileLocations locs) {
     super(locs);
   }
 
-  /**
-   * Kind of the expression. This is similar to using instanceof, except that it's more efficient
-   * and can be used in a switch/case.
-   */
-  public abstract Kind kind();
-
   /** Parses an expression. */
-  public static Expression parse(ParserInput input) throws SyntaxError.Exception {
-    return Parser.parseExpression(input);
+  public static Expression parse(ParserInput input, FileOptions options)
+      throws SyntaxError.Exception {
+    return Parser.parseExpression(input, options);
   }
 
+  /** Parses an expression with default options. */
+  public static Expression parse(ParserInput input) throws SyntaxError.Exception {
+    return parse(input, FileOptions.DEFAULT);
+  }
+
+  /**
+   * Parses a type expression.
+   *
+   * @param options parsing options; note that {@link FileOptions#allowStarlarkTypeSyntax} doesn't
+   *     need to be set - this method supports Starlark types implicitly.
+   */
+  public static Expression parseTypeExpression(ParserInput input, FileOptions options)
+      throws SyntaxError.Exception {
+    return Parser.parseTypeExpression(input, options);
+  }
+
+  /** Parses a type expression with default options. */
+  public static Expression parseTypeExpression(ParserInput input) throws SyntaxError.Exception {
+    return parseTypeExpression(input, FileOptions.DEFAULT);
+  }
 }

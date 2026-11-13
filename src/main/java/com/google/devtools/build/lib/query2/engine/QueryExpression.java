@@ -53,7 +53,7 @@ public abstract class QueryExpression {
   /** Scan and parse the specified query expression. */
   public static QueryExpression parse(String query, QueryEnvironment<?> env)
       throws QuerySyntaxException {
-    return QueryParser.parse(query, env);
+    return QueryExpressionResolver.resolve(QueryParser.parse(query), env);
   }
 
   protected QueryExpression() {}
@@ -78,7 +78,7 @@ public abstract class QueryExpression {
    */
   public abstract void collectTargetPatterns(Collection<String> literals);
 
-  /* Implementations should just be {@code return visitor.visit(this, context)}. */
+  /** Implementations should just be {@code return visitor.visit(this, context)}. */
   public abstract <T, C> T accept(QueryExpressionVisitor<T, C> visitor, C context);
 
   public final <T> T accept(QueryExpressionVisitor<T, Void> visitor) {
@@ -108,8 +108,7 @@ public abstract class QueryExpression {
   }
 
   /** Checks if this QueryExpression has a SomePathFunction at its top level. */
-  public boolean isTopLevelSomePathFunction() {
-    return this instanceof FunctionExpression
-        && "somepath".equals(((FunctionExpression) this).getFunction().getName());
+  public boolean isSomePathFunction() {
+    return false;
   }
 }

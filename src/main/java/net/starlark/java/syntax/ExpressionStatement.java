@@ -42,9 +42,4 @@ public final class ExpressionStatement extends Statement {
   public int getEndOffset() {
     return expression.getEndOffset();
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.EXPRESSION;
-  }
 }

@@ -13,11 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.config;
 
+import static com.google.common.base.Throwables.throwIfInstanceOf;
+import static com.google.common.base.Throwables.throwIfUnchecked;
+import static java.util.Objects.requireNonNull;
+
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.google.auto.value.AutoValue;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetOwnerScope;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.CompletionException;
 import javax.annotation.Nullable;
@@ -40,7 +44,8 @@ public final class FragmentFactory {
     try {
       fragment = fragmentCache.get(fragmentKey);
     } catch (CompletionException e) {
-      Throwables.propagateIfPossible(e.getCause(), InvalidConfigurationException.class);
+      throwIfInstanceOf(e.getCause(), InvalidConfigurationException.class);
+      throwIfUnchecked(e.getCause());
       throw e;
     }
     if (fragment != NULL_MARKER) {
@@ -71,7 +76,7 @@ public final class FragmentFactory {
         Fragment.requiredOptions(fragment);
     for (FragmentOptions options : original.getNativeOptions()) {
       // CoreOptions is implicitly required by all fragments.
-      if (options instanceof CoreOptions || requiredOptions.contains(options.getClass())) {
+      if (options instanceof CoreOptions || requiredOptions.contains(options.getOptionsClass())) {
         trimmed.addFragmentOptions(options);
       }
     }
@@ -81,25 +86,30 @@ public final class FragmentFactory {
     return trimmed.build();
   }
 
-  @AutoValue
-  abstract static class FragmentKey {
-    // These BuildOptions should be already-trimmed to maximize cache efficacy
-    abstract BuildOptions getBuildOptions();
-
-    abstract Class<? extends Fragment> getFragmentClass();
+  /**
+   * A fragment key.
+   *
+   * @param buildOptions These BuildOptions should be already-trimmed to maximize cache efficacy
+   */
+  @AutoCodec
+  record FragmentKey(BuildOptions buildOptions, Class<? extends Fragment> fragmentClass) {
+    FragmentKey {
+      requireNonNull(buildOptions, "buildOptions");
+      requireNonNull(fragmentClass, "fragmentClass");
+    }
 
     private static FragmentKey create(
         BuildOptions buildOptions, Class<? extends Fragment> fragmentClass) {
-      return new AutoValue_FragmentFactory_FragmentKey(buildOptions, fragmentClass);
+      return new FragmentKey(buildOptions, fragmentClass);
     }
   }
 
   private static Fragment makeFragment(FragmentKey fragmentKey)
       throws InvalidConfigurationException {
-    BuildOptions buildOptions = fragmentKey.getBuildOptions();
-    Class<? extends Fragment> fragmentClass = fragmentKey.getFragmentClass();
+    BuildOptions buildOptions = fragmentKey.buildOptions();
+    Class<? extends Fragment> fragmentClass = fragmentKey.fragmentClass();
     String noConstructorPattern = "%s lacks constructor(BuildOptions)";
-    try {
+    try (var _ = NestedSetOwnerScope.enter(fragmentKey)) {
       Fragment fragment =
           fragmentClass.getConstructor(BuildOptions.class).newInstance(buildOptions);
       return fragment.shouldInclude() ? fragment : NULL_MARKER;

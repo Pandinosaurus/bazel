@@ -23,34 +23,35 @@ import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
+import net.starlark.java.syntax.StarlarkType;
 
 /** Interface for an info object that indicates what output groups a rule has. */
 @StarlarkBuiltin(
     name = "OutputGroupInfo",
     category = DocCategory.PROVIDER,
     doc =
-        "A provider that indicates what output groups a rule has.<br>"
-            + "See <a href=\"../rules.$DOC_EXT#requesting-output-files\">Requesting output files"
-            + "</a> for more information.")
+        "A provider that indicates what output groups a rule has.<br>See <a"
+            + " href=\"https://bazel.build/extending/rules#requesting_output_files\">"
+            + "Requesting output files</a> for more information.")
 public interface OutputGroupInfoApi extends StructApi {
 
   /** Provider for {@link OutputGroupInfoApi}. */
   @StarlarkBuiltin(name = "Provider", documented = false, doc = "")
   interface OutputGroupInfoApiProvider extends ProviderApi {
 
+    public static StarlarkType getStarlarkType() {
+      return new BuiltinProviderType(OutputGroupInfoApiProvider.class, OutputGroupInfoApi.class);
+    }
+
     @StarlarkMethod(
         name = "OutputGroupInfo",
         doc =
-            "Instantiate this provider with <br>"
-                + "<pre class=language-python>"
-                + "OutputGroupInfo(group1 = &lt;files&gt;, group2 = &lt;files&gt;...)</pre>"
-                + "See <a href=\"../rules.$DOC_EXT#requesting-output-files\">Requesting output "
-                + "files </a> for more information.",
+            "Instantiate this provider with <br><pre class=language-python>OutputGroupInfo(group1 ="
+                + " &lt;files&gt;, group2 = &lt;files&gt;...)</pre>See <a"
+                + " href=\"https://bazel.build/extending/rules#requesting_output_files\">"
+                + "Requesting output files </a> for more information.",
         extraKeywords =
-            @Param(
-                name = "kwargs",
-                defaultValue = "{}",
-                doc = "Dictionary of arguments."),
+            @Param(name = "kwargs", defaultValue = "{}", doc = "Dictionary of arguments."),
         selfCall = true)
     @StarlarkConstructor
     OutputGroupInfoApi constructor(Dict<String, Object> kwargs) throws EvalException;

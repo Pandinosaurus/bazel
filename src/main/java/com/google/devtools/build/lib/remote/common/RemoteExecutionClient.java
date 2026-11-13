@@ -15,7 +15,10 @@ package com.google.devtools.build.lib.remote.common;
 
 import build.bazel.remote.execution.v2.ExecuteRequest;
 import build.bazel.remote.execution.v2.ExecuteResponse;
+import build.bazel.remote.execution.v2.ServerCapabilities;
+import com.google.common.util.concurrent.ListenableFuture;
 import java.io.IOException;
+import java.io.OutputStream;
 
 /**
  * An interface for a remote execution protocol.
@@ -24,10 +27,25 @@ import java.io.IOException;
  */
 public interface RemoteExecutionClient {
 
+  /** Returns the cache capabilities of the remote execution server */
+  ServerCapabilities getServerCapabilities() throws IOException;
+
   /** Execute an action remotely using Remote Execution API. */
   ExecuteResponse executeRemotely(
       RemoteActionExecutionContext context, ExecuteRequest request, OperationObserver observer)
       throws IOException, InterruptedException;
+
+  /**
+   * Reads a live output stream of an executing action, as advertised in the {@code
+   * stdout_stream_name} or {@code stderr_stream_name} of its {@link
+   * build.bazel.remote.execution.v2.ExecuteOperationMetadata}, writing the output to {@code out} as
+   * it arrives.
+   *
+   * <p>The returned future completes when the server ends the stream and fails if the stream can't
+   * be read. Cancelling it stops the read.
+   */
+  ListenableFuture<Void> readOutputStream(
+      RemoteActionExecutionContext context, String resourceName, OutputStream out);
 
   /** Close resources associated with the remote execution client. */
   void close();

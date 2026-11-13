@@ -60,9 +60,4 @@ public final class UnaryOperatorExpression extends Expression {
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.UNARY_OPERATOR;
-  }
 }

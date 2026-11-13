@@ -95,15 +95,18 @@ public final class Lexer {
 
     public final TokenKind kind;
     public final String word;
+    public final int startOffset;
+    public final int endOffset;
 
-    Token(TokenKind kind) {
-      this.kind = kind;
-      this.word = null;
+    Token(TokenKind kind, int startOffset, int endOffset) {
+      this(kind, null, startOffset, endOffset);
     }
 
-    Token(String word) {
-      this.kind = TokenKind.WORD;
+    Token(TokenKind kind, String word, int startOffset, int endOffset) {
+      this.kind = kind;
       this.word = word;
+      this.startOffset = startOffset;
+      this.endOffset = endOffset;
     }
 
     @Override
@@ -150,14 +153,13 @@ public final class Lexer {
     while (pos < input.length()) {
       char c = input.charAt(pos++);
       switch (c) {
-        case '\'':
-        case '"':
+        case '\'', '"' -> {
           if (c == quot) {
             // close-quote, all done.
-            return new Token(bufferSlice(oldPos + 1, pos - 1));
+            return new Token(TokenKind.WORD, bufferSlice(oldPos + 1, pos - 1), oldPos, pos);
           }
-          break;
-        default: // fall out
+        }
+        default -> {}
       }
     }
     throw new QuerySyntaxException("unclosed quotation");
@@ -168,30 +170,106 @@ public final class Lexer {
     return kind == null ? TokenKind.WORD : kind;
   }
 
-  private String scanWord() {
+  private String scanWord(char firstChar) {
     int oldPos = pos - 1;
+    boolean startsWithDoubleAt =
+        firstChar == '@' && pos < input.length() && input.charAt(pos) == '@';
     while (pos < input.length()) {
-      switch (input.charAt(pos)) {
-        case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
-        case 'g': case 'h': case 'i': case 'j': case 'k': case 'l':
-        case 'm': case 'n': case 'o': case 'p': case 'q': case 'r':
-        case 's': case 't': case 'u': case 'v': case 'w': case 'x':
-        case 'y': case 'z':
-        case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
-        case 'G': case 'H': case 'I': case 'J': case 'K': case 'L':
-        case 'M': case 'N': case 'O': case 'P': case 'Q': case 'R':
-        case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
-        case 'Y': case 'Z':
-        case '0': case '1': case '2': case '3': case '4': case '5':
-        case '6': case '7': case '8': case '9':
-        case '*': case '/': case '@': case '.': case '-': case '_':
-        case ':':
-        case '$':
-        case '~':
+      char c = input.charAt(pos);
+      switch (c) {
+        case 'a',
+            'b',
+            'c',
+            'd',
+            'e',
+            'f',
+            'g',
+            'h',
+            'i',
+            'j',
+            'k',
+            'l',
+            'm',
+            'n',
+            'o',
+            'p',
+            'q',
+            'r',
+            's',
+            't',
+            'u',
+            'v',
+            'w',
+            'x',
+            'y',
+            'z',
+            'A',
+            'B',
+            'C',
+            'D',
+            'E',
+            'F',
+            'G',
+            'H',
+            'I',
+            'J',
+            'K',
+            'L',
+            'M',
+            'N',
+            'O',
+            'P',
+            'Q',
+            'R',
+            'S',
+            'T',
+            'U',
+            'V',
+            'W',
+            'X',
+            'Y',
+            'Z',
+            '0',
+            '1',
+            '2',
+            '3',
+            '4',
+            '5',
+            '6',
+            '7',
+            '8',
+            '9',
+            '*',
+            '/',
+            '@',
+            '.',
+            '-',
+            '_',
+            ':',
+            '$',
+            '~',
+            '[',
+            ']' ->
+            pos++;
+        case '+' -> {
+          if (startsWithDoubleAt) {
+            // Allow unquoted canonical labels such as
+            // @@rules_jvm_external++maven+maven//:bar, but still parse @foo+@bar as two separate
+            // labels (here @foo refers to the @foo//:foo target).
+            // If @@foo+bar is intended to mean @@foo + bar, it can be written as such with spaces.
+            pos++;
+          } else {
+            return bufferSlice(oldPos, pos);
+          }
+        }
+        default -> {
+          // All remaining ASCII characters (and only ASCII characters) are query operators.
+          if (c <= 0x7F) {
+            return bufferSlice(oldPos, pos);
+          }
+          // Unicode characters are allowed in words, so we continue scanning.
           pos++;
-          break;
-       default:
-          return bufferSlice(oldPos, pos);
+        }
       }
     }
     return bufferSlice(oldPos, pos);
@@ -200,71 +278,43 @@ public final class Lexer {
   /**
    * Scans a word or keyword.
    *
-   * ON ENTRY: 'pos' is 1 + the index of the first char in the word.
-   * ON EXIT: 'pos' is 1 + the index of the last char in the word.
+   * <p>ON ENTRY: 'pos' is 1 + the index of the first char in the word. ON EXIT: 'pos' is 1 + the
+   * index of the last char in the word.
    *
    * @return the word or keyword token.
    */
-  private Token wordOrKeyword() {
-    String word = scanWord();
+  private Token wordOrKeyword(char firstChar) {
+    int startOffset = pos - 1;
+    String word = scanWord(firstChar);
     TokenKind kind = getTokenKindForWord(word);
-    return kind == TokenKind.WORD ? new Token(word) : new Token(kind);
+    return kind == TokenKind.WORD
+        ? new Token(TokenKind.WORD, word, startOffset, pos)
+        : new Token(kind, startOffset, pos);
   }
 
   /** Performs tokenization of the character buffer of file contents provided to the constructor. */
   private void tokenize() throws QuerySyntaxException {
     while (pos < input.length()) {
+      int startOffset = pos;
       char c = input.charAt(pos);
       pos++;
       switch (c) {
-      case '(': {
-        addToken(new Token(TokenKind.LPAREN));
-        break;
+        case '(' -> addToken(new Token(TokenKind.LPAREN, startOffset, pos));
+        case ')' -> addToken(new Token(TokenKind.RPAREN, startOffset, pos));
+        case ',' -> addToken(new Token(TokenKind.COMMA, startOffset, pos));
+        case '+' -> addToken(new Token(TokenKind.PLUS, startOffset, pos));
+        case '-' -> addToken(new Token(TokenKind.MINUS, startOffset, pos));
+        case '=' -> addToken(new Token(TokenKind.EQUALS, startOffset, pos));
+        case '^' -> addToken(new Token(TokenKind.CARET, startOffset, pos));
+        case '\n', ' ', '\t', '\r' -> {
+          /* ignore */
+        }
+        case '\'', '\"' -> addToken(quotedWord(c));
+        default -> addToken(wordOrKeyword(c));
       }
-      case ')': {
-        addToken(new Token(TokenKind.RPAREN));
-        break;
-      }
-      case ',': {
-        addToken(new Token(TokenKind.COMMA));
-        break;
-      }
-      case '+': {
-        addToken(new Token(TokenKind.PLUS));
-        break;
-      }
-      case '-': {
-        addToken(new Token(TokenKind.MINUS));
-        break;
-      }
-      case '=': {
-        addToken(new Token(TokenKind.EQUALS));
-        break;
-      }
-      case '^': {
-        addToken(new Token(TokenKind.CARET));
-        break;
-      }
-      case '\n':
-      case ' ':
-      case '\t':
-      case '\r': {
-        /* ignore */
-        break;
-      }
-      case '\'':
-      case '\"': {
-        addToken(quotedWord(c));
-        break;
-      }
-      default: {
-        addToken(wordOrKeyword());
-        break;
-      } // default
-      } // switch
-    } // while
+    }
 
-    addToken(new Token(TokenKind.EOF));
+    addToken(new Token(TokenKind.EOF, input.length(), input.length()));
 
     this.input = null; // release buffer now that we have our tokens
   }

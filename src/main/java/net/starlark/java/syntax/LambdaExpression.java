@@ -67,9 +67,4 @@ public final class LambdaExpression extends Expression {
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.LAMBDA;
-  }
 }

@@ -24,7 +24,7 @@ public final class Identifier extends Expression {
   private final String name;
   private final int nameOffset;
 
-  // set by Resolver
+  // Set by Resolver if applicable.
   @Nullable private Resolver.Binding binding;
 
   Identifier(FileLocations locs, String name, int nameOffset) {
@@ -55,7 +55,14 @@ public final class Identifier extends Expression {
     return name.startsWith("_");
   }
 
-  /** Returns information about the binding that the identifier denotes. Set by the resolver. */
+  /**
+   * Returns information about the binding (symbol) that the identifier refers to.
+   *
+   * <p>Set by the resolver.
+   *
+   * <p>May be null, even after resolving, if this identifier does not refer to a symbol. This
+   * happens for instance with keyword arguments and object fields.
+   */
   @Nullable
   public Resolver.Binding getBinding() {
     return binding;
@@ -69,11 +76,6 @@ public final class Identifier extends Expression {
   @Override
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
-  }
-
-  @Override
-  public Kind kind() {
-    return Kind.IDENTIFIER;
   }
 
   /** Reports whether the string is a valid identifier. */
@@ -128,8 +130,7 @@ public final class Identifier extends Expression {
       result.add((Identifier) lhs);
       return;
     }
-    if (lhs instanceof ListExpression) {
-      ListExpression variables = (ListExpression) lhs;
+    if (lhs instanceof ListExpression variables) {
       for (Expression expression : variables.getElements()) {
         collectBoundIdentifiers(expression, result);
       }

@@ -54,9 +54,4 @@ public final class ConditionalExpression extends Expression {
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.CONDITIONAL;
-  }
 }

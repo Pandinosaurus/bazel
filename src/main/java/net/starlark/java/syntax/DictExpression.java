@@ -87,11 +87,6 @@ public final class DictExpression extends Expression {
     visitor.visit(this);
   }
 
-  @Override
-  public Kind kind() {
-    return Kind.DICT_EXPR;
-  }
-
   public ImmutableList<Entry> getEntries() {
     return entries;
   }

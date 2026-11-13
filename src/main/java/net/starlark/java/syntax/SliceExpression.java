@@ -79,9 +79,4 @@ public final class SliceExpression extends Expression {
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.SLICE;
-  }
 }

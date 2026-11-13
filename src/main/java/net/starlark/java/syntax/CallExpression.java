@@ -58,7 +58,18 @@ public final class CallExpression extends Expression {
     return numPositionalArgs;
   }
 
-  /** Returns the function arguments. */
+  /**
+   * Returns the function call's arguments.
+   *
+   * <p>The {@link Resolver} verifies that the arguments are in the following order:
+   *
+   * <ol>
+   *   <li>{@link Argument.Positional} arguments (arbitrary number)
+   *   <li>{@link Argument.Keyword} arguments (arbitrary number, must have unique names)
+   *   <li>{@link Argument.Star} (at most one)
+   *   <li>{@link Argument.StarStar} (at most one)
+   * </ol>
+   */
   public ImmutableList<Argument> getArguments() {
     return arguments;
   }
@@ -95,10 +106,5 @@ public final class CallExpression extends Expression {
   @Override
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
-  }
-
-  @Override
-  public Kind kind() {
-    return Kind.CALL;
   }
 }

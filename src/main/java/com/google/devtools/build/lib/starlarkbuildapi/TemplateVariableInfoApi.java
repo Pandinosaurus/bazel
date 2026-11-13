@@ -23,7 +23,7 @@ import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.StarlarkThread;
+import net.starlark.java.syntax.StarlarkType;
 
 /** Provides access to make variables from the current fragments. */
 @StarlarkBuiltin(
@@ -54,6 +54,11 @@ public interface TemplateVariableInfoApi extends StructApi {
   @StarlarkBuiltin(name = "Provider", documented = false, doc = "")
   interface Provider extends ProviderApi {
 
+    public static StarlarkType getStarlarkType() {
+      return new BuiltinProviderType(
+          TemplateVariableInfoApi.Provider.class, TemplateVariableInfoApi.class);
+    }
+
     @StarlarkMethod(
         name = "TemplateVariableInfo",
         doc = "The <code>TemplateVariableInfo</code> constructor.",
@@ -61,9 +66,7 @@ public interface TemplateVariableInfoApi extends StructApi {
         parameters = {
           @Param(name = "vars", positional = true, named = true),
         },
-        selfCall = true,
-        useStarlarkThread = true)
-    TemplateVariableInfoApi templateVariableInfo(Dict<?, ?> vars, StarlarkThread thread)
-        throws EvalException;
+        selfCall = true)
+    TemplateVariableInfoApi templateVariableInfo(Dict<?, ?> vars) throws EvalException;
   }
 }

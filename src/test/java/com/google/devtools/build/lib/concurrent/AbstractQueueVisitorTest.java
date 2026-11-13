@@ -17,15 +17,19 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.assertThrows;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
+import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor.ExceptionHandlingMode;
+import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor.ExecutorOwnership;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier.ErrorClassification;
+import com.google.devtools.build.lib.concurrent.QuiescingTask.PriorityTier;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -58,10 +62,10 @@ public class AbstractQueueVisitorTest {
     SettableFuture<Object> future = SettableFuture.create();
     AbstractQueueVisitor counter =
         new AbstractQueueVisitor(
-            /*parallelism=*/ 2,
+            /* parallelism= */ 2,
             /* keepAliveTime= */ 3L,
             TimeUnit.SECONDS,
-            /* failFastOnException= */ true,
+            ExceptionHandlingMode.FAIL_FAST,
             "FOO-BAR",
             ErrorClassifier.DEFAULT);
     counter.dependOnFuture(future);
@@ -83,10 +87,10 @@ public class AbstractQueueVisitorTest {
     SettableFuture<Object> future = SettableFuture.create();
     AbstractQueueVisitor counter =
         new AbstractQueueVisitor(
-            /*parallelism=*/ 2,
+            /* parallelism= */ 2,
             /* keepAliveTime= */ 3L,
             TimeUnit.SECONDS,
-            /* failFastOnException= */ true,
+            ExceptionHandlingMode.FAIL_FAST,
             "FOO-BAR",
             ErrorClassifier.DEFAULT);
     counter.dependOnFuture(future);
@@ -257,9 +261,10 @@ public class AbstractQueueVisitorTest {
     final CountDownLatch latch1 = new CountDownLatch(1);
     final CountDownLatch latch2 = new CountDownLatch(1);
     final boolean[] workerThreadInterrupted = { false };
-    ConcreteQueueVisitor visitor = (executor == null)
-        ? new ConcreteQueueVisitor()
-        : new ConcreteQueueVisitor(executor, true);
+    ConcreteQueueVisitor visitor =
+        (executor == null)
+            ? new ConcreteQueueVisitor()
+            : new ConcreteQueueVisitor(executor, ExceptionHandlingMode.FAIL_FAST);
 
     visitor.execute(
         new Runnable() {
@@ -286,13 +291,13 @@ public class AbstractQueueVisitorTest {
   @Test
   public void failFast() throws Exception {
     // In failFast mode, we only run actions queued before the exception.
-    assertFailFast(null, true, false, "a", "b");
+    assertFailFast(null, ExceptionHandlingMode.FAIL_FAST, false, "a", "b");
 
     // In !failFast mode, we complete all queued actions.
-    assertFailFast(null, false, false, "a", "b", "1", "2");
+    assertFailFast(null, ExceptionHandlingMode.KEEP_GOING, false, "a", "b", "1", "2");
 
     // Now check fail-fast on interrupt:
-    assertFailFast(null, false, true, "a", "b");
+    assertFailFast(null, ExceptionHandlingMode.KEEP_GOING, true, "a", "b");
   }
 
   @Test
@@ -300,13 +305,13 @@ public class AbstractQueueVisitorTest {
     ThreadPoolExecutor executor = new ThreadPoolExecutor(5, 5, 0, TimeUnit.SECONDS,
                                                          new LinkedBlockingQueue<Runnable>());
     // In failFast mode, we only run actions queued before the exception.
-    assertFailFast(executor, true, false, "a", "b");
+    assertFailFast(executor, ExceptionHandlingMode.FAIL_FAST, false, "a", "b");
 
     // In !failFast mode, we complete all queued actions.
-    assertFailFast(executor, false, false, "a", "b", "1", "2");
+    assertFailFast(executor, ExceptionHandlingMode.KEEP_GOING, false, "a", "b", "1", "2");
 
     // Now check fail-fast on interrupt:
-    assertFailFast(executor, false, true, "a", "b");
+    assertFailFast(executor, ExceptionHandlingMode.KEEP_GOING, true, "a", "b");
 
     executor.shutdown();
     assertThat(executor.awaitTermination(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS))
@@ -315,17 +320,17 @@ public class AbstractQueueVisitorTest {
 
   private static void assertFailFast(
       ThreadPoolExecutor executor,
-      boolean failFastOnException,
+      ExceptionHandlingMode exceptionHandlingMode,
       boolean interrupt,
       String... expectedVisited)
       throws Exception {
     assertThat(executor == null || !executor.isShutdown()).isTrue();
     AbstractQueueVisitor visitor =
         (executor == null)
-            ? new ConcreteQueueVisitor(failFastOnException)
-            : new ConcreteQueueVisitor(executor, failFastOnException);
+            ? new ConcreteQueueVisitor(exceptionHandlingMode)
+            : new ConcreteQueueVisitor(executor, exceptionHandlingMode);
 
-    List<String> visitedList = Collections.synchronizedList(Lists.<String>newArrayList());
+    List<String> visitedList = Collections.synchronizedList(new ArrayList<String>());
 
     // Runnable "ra" will await the uncaught exception from
     // "throwingRunnable", then add "a" to the list and
@@ -353,8 +358,8 @@ public class AbstractQueueVisitorTest {
       } else {
       assertThat(e).isSameInstanceAs(THROWABLE);
     }
-    assertWithMessage("got: " + visitedList + "\nwant: " + Arrays.toString(expectedVisited))
-        .that(Sets.newHashSet(visitedList))
+    assertWithMessage("got: %s\nwant: %s", visitedList, Arrays.toString(expectedVisited))
+        .that(new HashSet<>(visitedList))
         .isEqualTo(Sets.newHashSet(expectedVisited));
 
     if (executor != null) {
@@ -480,10 +485,7 @@ public class AbstractQueueVisitorTest {
     };
     AbstractQueueVisitor visitor =
         new AbstractQueueVisitor(
-            executor,
-            /*shutdownOnCompletion=*/ true,
-            /*failFastOnException=*/ false,
-            errorClassifier);
+            executor, ExecutorOwnership.PRIVATE, ExceptionHandlingMode.KEEP_GOING, errorClassifier);
     final CountDownLatch exnLatch = visitor.getExceptionLatchForTestingOnly();
     Runnable criticalExceptionRunnable = new Runnable() {
       @Override
@@ -576,16 +578,20 @@ public class AbstractQueueVisitorTest {
 
     public CountingQueueVisitor() {
       super(
-          /*parallelism=*/ 5,
+          /* parallelism= */ 5,
           /* keepAliveTime= */ 3L,
           TimeUnit.SECONDS,
-          /* failFastOnException= */ false,
+          ExceptionHandlingMode.KEEP_GOING,
           THREAD_NAME,
           ErrorClassifier.DEFAULT);
     }
 
     CountingQueueVisitor(ThreadPoolExecutor executor) {
-      super(executor, false, true, ErrorClassifier.DEFAULT);
+      super(
+          executor,
+          ExecutorOwnership.SHARED,
+          ExceptionHandlingMode.FAIL_FAST,
+          ErrorClassifier.DEFAULT);
     }
 
     public void enqueue() {
@@ -617,32 +623,110 @@ public class AbstractQueueVisitorTest {
           5,
           3L,
           TimeUnit.SECONDS,
-          /* failFastOnException= */ false,
+          ExceptionHandlingMode.KEEP_GOING,
           THREAD_NAME,
           ErrorClassifier.DEFAULT);
     }
 
-    ConcreteQueueVisitor(boolean failFast) {
-      super(
-          5,
-          3L,
-          TimeUnit.SECONDS,
-          failFast,
-          THREAD_NAME,
-          ErrorClassifier.DEFAULT);
+    ConcreteQueueVisitor(ExceptionHandlingMode exceptionHandlingMode) {
+      super(5, 3L, TimeUnit.SECONDS, exceptionHandlingMode, THREAD_NAME, ErrorClassifier.DEFAULT);
     }
 
-    ConcreteQueueVisitor(ThreadPoolExecutor executor, boolean failFast) {
-      super(executor, /*shutdownOnCompletion=*/ false, failFast, ErrorClassifier.DEFAULT);
+    ConcreteQueueVisitor(ThreadPoolExecutor executor, ExceptionHandlingMode exceptionHandlingMode) {
+      super(executor, ExecutorOwnership.SHARED, exceptionHandlingMode, ErrorClassifier.DEFAULT);
     }
+  }
+
+  @Test
+  public void priorityExecutorServiceOrdersTasksByPriority() throws Exception {
+    AbstractQueueVisitor defaultVisitor =
+        AbstractQueueVisitor.create(
+            /* name= */ "DefaultQueueTest", /* parallelism= */ 1, ErrorClassifier.DEFAULT);
+    assertThat(defaultVisitor.ordersTasksByPriority()).isFalse();
+    defaultVisitor.awaitQuiescence(/* interruptWorkers= */ false);
+
+    AbstractQueueVisitor visitor =
+        AbstractQueueVisitor.createWithExecutorService(
+            AbstractQueueVisitor.createPriorityExecutorService(
+                /* parallelism= */ 1, /* poolName= */ "PriorityQueueTest"),
+            ExceptionHandlingMode.FAIL_FAST,
+            ErrorClassifier.DEFAULT);
+    assertThat(visitor.ordersTasksByPriority()).isTrue();
+    CountDownLatch blockerStarted = new CountDownLatch(1);
+    CountDownLatch releaseBlocker = new CountDownLatch(1);
+    List<String> executionOrder = Collections.synchronizedList(new ArrayList<>());
+
+    visitor.execute(
+        () -> {
+          blockerStarted.countDown();
+          Uninterruptibles.awaitUninterruptibly(releaseBlocker);
+        });
+    assertThat(blockerStarted.await(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+    final class PrioritizedTask extends QuiescingTask {
+      private final PriorityTier tier;
+      private final int depth;
+      private final Runnable delegate;
+
+      PrioritizedTask(PriorityTier tier, int depth, Runnable delegate) {
+        super(visitor);
+        this.tier = tier;
+        this.depth = depth;
+        this.delegate = delegate;
+      }
+
+      @Override
+      public PriorityTier priorityTier() {
+        return tier;
+      }
+
+      @Override
+      public int priorityDepth() {
+        return depth;
+      }
+
+      @Override
+      public void runCore() {
+        delegate.run();
+      }
+    }
+
+    visitor.execute(
+        new QuiescingTask(visitor) {
+          @Override
+          public void runCore() {
+            executionOrder.add("default_task");
+          }
+        });
+    visitor.execute(
+        new PrioritizedTask(
+            PriorityTier.DEPTH_ORDERED, /* depth= */ 1, () -> executionOrder.add("depth_1")));
+    visitor.execute(
+        new PrioritizedTask(
+            PriorityTier.IN_PROGRESS, /* depth= */ 0, () -> executionOrder.add("in_progress")));
+    visitor.execute(() -> executionOrder.add("raw_runnable"));
+    visitor.execute(
+        new PrioritizedTask(
+            PriorityTier.DEPTH_ORDERED, /* depth= */ 5, () -> executionOrder.add("depth_5")));
+    visitor.execute(
+        new PrioritizedTask(
+            PriorityTier.DEPTH_ORDERED, /* depth= */ 3, () -> executionOrder.add("depth_3")));
+
+    releaseBlocker.countDown();
+    visitor.awaitQuiescence(/* interruptWorkers= */ false);
+
+    assertThat(executionOrder.subList(0, 2)).containsExactly("in_progress", "raw_runnable");
+    assertThat(executionOrder.subList(2, 6))
+        .containsExactly("depth_5", "depth_3", "depth_1", "default_task")
+        .inOrder();
   }
 
   private static AbstractQueueVisitor createQueueVisitorWithConstantErrorClassification(
       ThreadPoolExecutor executor, final ErrorClassification classification) {
     return new AbstractQueueVisitor(
         executor,
-        /*shutdownOnCompletion=*/ true,
-        /*failFastOnException=*/ false,
+        ExecutorOwnership.PRIVATE,
+        ExceptionHandlingMode.KEEP_GOING,
         new ErrorClassifier() {
           @Override
           protected ErrorClassification classifyException(Exception e) {

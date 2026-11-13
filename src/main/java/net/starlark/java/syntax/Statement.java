@@ -14,30 +14,19 @@
 package net.starlark.java.syntax;
 
 /** Base class for all statements nodes in the AST. */
-public abstract class Statement extends Node {
-
-  /**
-   * Kind of the statement. This is similar to using instanceof, except that it's more efficient and
-   * can be used in a switch/case.
-   */
-  public enum Kind {
-    ASSIGNMENT,
-    EXPRESSION,
-    FLOW,
-    FOR,
-    DEF,
-    IF,
-    LOAD,
-    RETURN,
-  }
+public abstract sealed class Statement extends Node
+    permits AssignmentStatement,
+        DefStatement,
+        ExpressionStatement,
+        FlowStatement,
+        ForStatement,
+        IfStatement,
+        LoadStatement,
+        ReturnStatement,
+        TypeAliasStatement,
+        VarStatement {
 
   Statement(FileLocations locs) {
     super(locs);
   }
-
-  /**
-   * Kind of the statement. This is similar to using instanceof, except that it's more efficient and
-   * can be used in a switch/case.
-   */
-  public abstract Kind kind();
 }

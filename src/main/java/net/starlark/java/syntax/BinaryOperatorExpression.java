@@ -93,9 +93,4 @@ public final class BinaryOperatorExpression extends Expression {
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.BINARY_OPERATOR;
-  }
 }

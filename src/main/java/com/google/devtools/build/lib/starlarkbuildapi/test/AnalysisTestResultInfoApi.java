@@ -14,18 +14,21 @@
 
 package com.google.devtools.build.lib.starlarkbuildapi.test;
 
+import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.docgen.annot.StarlarkConstructor;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.StarlarkValue;
+import net.starlark.java.syntax.StarlarkType;
 
 /**
  * Encapsulates information about an analysis-phase error which would have occurred during a build.
  */
 @StarlarkBuiltin(
     name = "AnalysisTestResultInfo",
+    category = DocCategory.PROVIDER,
     doc =
         "Encapsulates the result of analyis-phase testing. Build targets which return an instance"
             + " of this provider signal to the build system that it should generate a 'stub' test"
@@ -52,6 +55,11 @@ public interface AnalysisTestResultInfoApi extends StarlarkValue {
   /** Provider class for {@link AnalysisTestResultInfoApi} objects. */
   @StarlarkBuiltin(name = "Provider", documented = false, doc = "")
   interface AnalysisTestResultInfoProviderApi extends ProviderApi {
+
+    public static StarlarkType getStarlarkType() {
+      return new BuiltinProviderType(
+          AnalysisTestResultInfoProviderApi.class, AnalysisTestResultInfoApi.class);
+    }
 
     @StarlarkMethod(
         name = "AnalysisTestResultInfo",

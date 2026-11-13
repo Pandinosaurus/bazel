@@ -37,21 +37,26 @@ public class SymlinkDependencyAnalysisTest extends BuildIntegrationTestCase {
   @Test
   public void testSymlinkTargetChangeCausesRebuild() throws Exception {
     Path buildFile =
-        write("symlink/BUILD",
-              "genrule(name = 'symlink',",
-              "        srcs = ['link'],",
-              "        outs = ['out'],",
-              "        cmd  = '/bin/cp $(location link) $(location out)')");
+        write(
+            "symlink/BUILD",
+            """
+            genrule(
+                name = "symlink",
+                srcs = ["link"],
+                outs = ["out"],
+                cmd = "/bin/cp $(location link) $(location out)",
+            )
+            """);
     Path target = write("symlink/target", "foo");
 
     Path link = buildFile.getParentDirectory().getChild("link");
     link.createSymbolicLink(target);
 
-    target.setLastModifiedTime(10000);
+    target.setLastModifiedTimeNanos(10000);
     assertThat(buildAndReturnOutput()).isEqualTo("foo\n"); // first build
 
     write("symlink/target", "bar");
-    target.setLastModifiedTime(20000);
+    target.setLastModifiedTimeNanos(20000);
     assertThat(buildAndReturnOutput()).isEqualTo("bar\n"); // should do a rebuild
   }
 }

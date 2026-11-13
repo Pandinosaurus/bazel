@@ -14,9 +14,8 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Objects.requireNonNull;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableSet;
@@ -26,8 +25,10 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
 import com.google.devtools.build.lib.util.ClassName;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -38,48 +39,51 @@ import java.util.Set;
  * com.google.devtools.build.lib.analysis.config.FragmentOptions} required by this target and its
  * transitive dependencies.
  *
- * <p>See {@link com.google.devtools.build.lib.analysis.config.RequiredFragmentsUtil} for details.
+ * <p>See {@link RequiredFragmentsUtil} for details.
  */
-@AutoValue
 @Immutable
-public abstract class RequiredConfigFragmentsProvider implements TransitiveInfoProvider {
+@AutoCodec
+public record RequiredConfigFragmentsProvider(
+    ImmutableSet<Class<? extends FragmentOptions>> optionsClasses,
+    ImmutableSet<Class<? extends Fragment>> fragmentClasses,
+    ImmutableSet<String> defines,
+    ImmutableSet<Label> starlarkOptions)
+    implements TransitiveInfoProvider {
+  public RequiredConfigFragmentsProvider {
+    requireNonNull(optionsClasses, "optionsClasses");
+    requireNonNull(fragmentClasses, "fragmentClasses");
+    requireNonNull(defines, "defines");
+    requireNonNull(starlarkOptions, "starlarkOptions");
+  }
 
   private static final Interner<RequiredConfigFragmentsProvider> interner =
       BlazeInterners.newWeakInterner();
 
   @SerializationConstant
   public static final RequiredConfigFragmentsProvider EMPTY =
-      new AutoValue_RequiredConfigFragmentsProvider(
+      new RequiredConfigFragmentsProvider(
           ImmutableSet.of(), ImmutableSet.of(), ImmutableSet.of(), ImmutableSet.of());
-
-  RequiredConfigFragmentsProvider() {}
-
-  public abstract ImmutableSet<Class<? extends FragmentOptions>> getOptionsClasses();
-
-  public abstract ImmutableSet<Class<? extends Fragment>> getFragmentClasses();
-
-  public abstract ImmutableSet<String> getDefines();
-
-  public abstract ImmutableSet<Label> getStarlarkOptions();
 
   @Override
   public final String toString() {
     return MoreObjects.toStringHelper(RequiredConfigFragmentsProvider.class)
         .add(
             "optionsClasses",
-            Collections2.transform(getOptionsClasses(), ClassName::getSimpleNameWithOuter))
+            Collections2.transform(optionsClasses(), ClassName::getSimpleNameWithOuter))
         .add(
             "fragmentClasses",
-            Collections2.transform(getFragmentClasses(), ClassName::getSimpleNameWithOuter))
-        .add("defines", getDefines())
-        .add("starlarkOptions", getStarlarkOptions())
+            Collections2.transform(fragmentClasses(), ClassName::getSimpleNameWithOuter))
+        .add("defines", defines())
+        .add("starlarkOptions", starlarkOptions())
         .toString();
   }
 
   /** Merges the values of one or more {@link RequiredConfigFragmentsProvider} instances. */
   public static RequiredConfigFragmentsProvider merge(
       List<RequiredConfigFragmentsProvider> providers) {
-    checkArgument(!providers.isEmpty());
+    if (providers.isEmpty()) {
+      return EMPTY;
+    }
     RequiredConfigFragmentsProvider.Builder merged = null;
     RequiredConfigFragmentsProvider candidate = EMPTY;
     for (RequiredConfigFragmentsProvider provider : providers) {
@@ -98,7 +102,11 @@ public abstract class RequiredConfigFragmentsProvider implements TransitiveInfoP
   }
 
   public static Builder builder() {
-    return new Builder();
+    return builder(/* starlarkOnly= */ false);
+  }
+
+  public static Builder builder(boolean starlarkOnly) {
+    return new Builder(starlarkOnly);
   }
 
   /**
@@ -111,53 +119,82 @@ public abstract class RequiredConfigFragmentsProvider implements TransitiveInfoP
    * dependencies.
    */
   public static final class Builder {
+    private final boolean starlarkOnly;
     private Set<Class<? extends FragmentOptions>> optionsClasses = ImmutableSet.of();
     private Set<Class<? extends Fragment>> fragmentClasses = ImmutableSet.of();
     private Set<String> defines = ImmutableSet.of();
     private Set<Label> starlarkOptions = ImmutableSet.of();
 
-    private Builder() {}
+    private Builder(boolean starlarkOnly) {
+      this.starlarkOnly = starlarkOnly;
+    }
 
+    public boolean isStarlarkOnly() {
+      return starlarkOnly;
+    }
+
+    @CanIgnoreReturnValue
     public Builder addOptionsClass(Class<? extends FragmentOptions> optionsClass) {
-      optionsClasses = append(optionsClasses, optionsClass);
+      if (!starlarkOnly) {
+        optionsClasses = append(optionsClasses, optionsClass);
+      }
       return this;
     }
 
+    @CanIgnoreReturnValue
     public Builder addOptionsClasses(Collection<Class<? extends FragmentOptions>> optionsClasses) {
-      this.optionsClasses = appendAll(this.optionsClasses, optionsClasses);
+      if (!starlarkOnly) {
+        this.optionsClasses = appendAll(this.optionsClasses, optionsClasses);
+      }
       return this;
     }
 
+    @CanIgnoreReturnValue
     public Builder addFragmentClasses(Collection<Class<? extends Fragment>> fragmentClasses) {
-      this.fragmentClasses = appendAll(this.fragmentClasses, fragmentClasses);
+      if (!starlarkOnly) {
+        this.fragmentClasses = appendAll(this.fragmentClasses, fragmentClasses);
+      }
       return this;
     }
 
+    @CanIgnoreReturnValue
     public Builder addDefine(String define) {
-      defines = append(defines, define);
+      if (!starlarkOnly) {
+        defines = append(defines, define);
+      }
       return this;
     }
 
+    @CanIgnoreReturnValue
     public Builder addDefines(Collection<String> defines) {
-      this.defines = appendAll(this.defines, defines);
+      if (!starlarkOnly) {
+        this.defines = appendAll(this.defines, defines);
+      }
       return this;
     }
 
+    @CanIgnoreReturnValue
     public Builder addStarlarkOption(Label starlarkOption) {
       starlarkOptions = append(starlarkOptions, starlarkOption);
       return this;
     }
 
+    @CanIgnoreReturnValue
     public Builder addStarlarkOptions(Collection<Label> starlarkOptions) {
       this.starlarkOptions = appendAll(this.starlarkOptions, starlarkOptions);
       return this;
     }
 
+    @CanIgnoreReturnValue
     public Builder merge(RequiredConfigFragmentsProvider provider) {
-      optionsClasses = appendAll(optionsClasses, provider.getOptionsClasses());
-      fragmentClasses = appendAll(fragmentClasses, provider.getFragmentClasses());
-      defines = appendAll(defines, provider.getDefines());
-      starlarkOptions = appendAll(starlarkOptions, provider.getStarlarkOptions());
+      if (provider != null) {
+        if (!starlarkOnly) {
+          optionsClasses = appendAll(optionsClasses, provider.optionsClasses());
+          fragmentClasses = appendAll(fragmentClasses, provider.fragmentClasses());
+          defines = appendAll(defines, provider.defines());
+        }
+        starlarkOptions = appendAll(starlarkOptions, provider.starlarkOptions());
+      }
       return this;
     }
 
@@ -219,7 +256,7 @@ public abstract class RequiredConfigFragmentsProvider implements TransitiveInfoP
         return EMPTY;
       }
       return interner.intern(
-          new AutoValue_RequiredConfigFragmentsProvider(
+          new RequiredConfigFragmentsProvider(
               ImmutableSet.copyOf(optionsClasses),
               ImmutableSet.copyOf(fragmentClasses),
               ImmutableSet.copyOf(defines),

@@ -16,7 +16,9 @@ package com.google.devtools.build.lib.runtime;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
+import com.google.devtools.build.lib.bazel.BazelStartupOptionsModule;
 import com.google.devtools.build.lib.bazel.rules.BazelRulesModule;
+import com.google.devtools.build.lib.compress.CompressionServiceImpl;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.testutil.Scratch;
@@ -40,7 +42,8 @@ class BlazeOptionHandlerTestHelper {
       List<Class<? extends OptionsBase>> optionsClasses,
       boolean allowResidue,
       @Nullable String aliasFlag,
-      boolean skipStarlarkPrefixes)
+      boolean skipStarlarkPrefixes,
+      InvocationPolicy invocationPolicy)
       throws Exception {
     parser = createOptionsParser(optionsClasses, allowResidue, aliasFlag, skipStarlarkPrefixes);
 
@@ -56,15 +59,16 @@ class BlazeOptionHandlerTestHelper {
             .setProductName(productName)
             .setStartupOptionsProvider(
                 OptionsParser.builder().optionsClasses(BlazeServerStartupOptions.class).build())
+            .addBlazeService(new CompressionServiceImpl())
+            .addBlazeModule(new BazelStartupOptionsModule())
             .addBlazeModule(new BazelRulesModule())
             .build();
-    runtime.overrideCommands(ImmutableList.of(new C0Command()));
+    runtime.overrideCommands(ImmutableList.of(new MockBuildCommand()));
 
     BlazeDirectories directories =
         new BlazeDirectories(
             serverDirectories,
             scratch.dir("workspace"),
-            /* defaultSystemJavabase= */ null,
             productName);
     runtime.initWorkspace(directories, /*binTools=*/ null);
 
@@ -72,15 +76,10 @@ class BlazeOptionHandlerTestHelper {
         new BlazeOptionHandler(
             runtime,
             runtime.getWorkspace(),
-            new C0Command(),
-            C0Command.class.getAnnotation(Command.class),
+            new MockBuildCommand(),
+            MockBuildCommand.class.getAnnotation(Command.class),
             parser,
-            InvocationPolicy.getDefaultInstance());
-  }
-
-  public BlazeOptionHandlerTestHelper(
-      List<Class<? extends OptionsBase>> optionsClasses, boolean allowResidue) throws Exception {
-    this(optionsClasses, allowResidue, /* aliasFlag= */ null, /* skipStarlarkPrefixes= */ false);
+            invocationPolicy);
   }
 
   private static OptionsParser createOptionsParser(
@@ -116,11 +115,11 @@ class BlazeOptionHandlerTestHelper {
 
   /** Custom command for testing. */
   @Command(
-      name = "c0",
-      shortDescription = "c0 desc",
-      help = "c0 help",
+      name = "build",
+      shortDescription = "mock build desc",
+      help = "mock build help",
       options = {TestOptions.class})
-  protected static class C0Command implements BlazeCommand {
+  protected static class MockBuildCommand implements BlazeCommand {
     @Override
     public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
       throw new UnsupportedOperationException();

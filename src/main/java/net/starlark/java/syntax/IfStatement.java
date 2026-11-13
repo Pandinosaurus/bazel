@@ -89,9 +89,4 @@ public final class IfStatement extends Statement {
   public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
-
-  @Override
-  public Kind kind() {
-    return Kind.IF;
-  }
 }

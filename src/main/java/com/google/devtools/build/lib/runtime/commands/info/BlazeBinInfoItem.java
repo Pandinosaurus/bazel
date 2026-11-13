@@ -18,7 +18,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Supplier;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationValue;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.InfoItem;
 
@@ -28,13 +27,23 @@ public final class BlazeBinInfoItem extends InfoItem {
     super(productName + "-bin", "Configuration dependent directory for binaries.", false);
   }
 
+  @Override
+  public boolean requiresWorkspace() {
+    return true;
+  }
+
   // This is one of the three (non-hidden) info items that require a configuration, because the
   // corresponding paths contain the short name. Maybe we should recommend using the symlinks
   // or make them hidden by default?
   @Override
+  public boolean needsConfiguration() {
+    return true;
+  }
+
+  @Override
   public byte[] get(
       Supplier<BuildConfigurationValue> configurationSupplier, CommandEnvironment env) {
     checkNotNull(configurationSupplier);
-    return print(configurationSupplier.get().getBinDirectory(RepositoryName.MAIN).getRoot());
+    return print(configurationSupplier.get().getBinDirectory().getRoot());
   }
 }
